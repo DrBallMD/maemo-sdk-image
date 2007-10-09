@@ -391,23 +391,34 @@ halt-ami
 
 function upgrade-maemo {
 wget http://repository.maemo.org/stable/3.2/maemo-sdk-nokia-binaries_3.2.sh
-sudo -u sbuser ./maemo-sdk-install_3.1.sh -y
+chmod +x ./maemo-sdk-nokia-binaries_3.2.sh
+./maemo-sdk-nokia-binaries_3.2.sh -y
 # Must accept license
 
-sudo -u sbuser /scratchbox/login sb-conf select SDK_X86
-sudo -u sbuser /scratchbox/login fakeroot apt-get -y install maemo-explicit
-sudo -u sbuser /scratchbox/login sb-conf select SDK_ARMEL
-sudo -u sbuser /scratchbox/login fakeroot apt-get -y install maemo-explicit
-sudo -u sbuser /scratchbox/login apt-get update
-sudo -u sbuser /scratchbox/login fakeroot apt-get -f install
-sudo -u sbuser /scratchbox/login fakeroot apt-get -y -f dist-upgrade
+cat <<EOSBUP >/scratchbox/users/sbuser/home/sbuser/sb_up
+sb-conf select SDK_X86
+fakeroot apt-get -y install maemo-explicit
+sb-conf select SDK_ARMEL
+fakeroot apt-get -y install maemo-explicit
+apt-get update
+fakeroot apt-get -f install
+fakeroot apt-get -y -f dist-upgrade
 # May need to choose to overwrite some files
 
-sudo -u sbuser /scratchbox/login sb-conf select SDK_X86
-sudo -u sbuser /scratchbox/login apt-get update
-sudo -u sbuser /scratchbox/login fakeroot apt-get -f install
-sudo -u sbuser /scratchbox/login fakeroot apt-get -y -f dist-upgrade
+sb-conf select SDK_X86
+apt-get update
+fakeroot apt-get -f install
+fakeroot apt-get -y -f dist-upgrade
 # May need to choose to overwrite some files
+
+echo "deb-src http://repository.maemo.org/ maemo3.2 free" >> /etc/apt/sources.list
+fakeroot apt-get update
+EOSBUP
+
+chown sbuser /scratchbox/users/sbuser/home/sbuser/sb_up
+chmod +x /scratchbox/users/sbuser/home/sbuser/sb_up
+sudo -u sbuser /scratchbox/login ./sb_up
+
 }
 
 $*
