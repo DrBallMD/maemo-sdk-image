@@ -421,5 +421,90 @@ sudo -u sbuser /scratchbox/login ./sb_up
 
 }
 
+function create-gentoo-image {
+##
+## This portion runs on FC4 and creates a base Ubuntu image
+##
+set -e
+
+# Set up a filesystem image
+dd if=/dev/zero of=/mnt/gentoo2007_0.img bs=1M count=4096
+mkfs.ext3 -F -j -m 0 /mnt/gentoo2007_0.img
+
+mkdir /gentoo
+mount /mnt/gentoo2007_0.img /gentoo -o loop
+
+cd /tmp
+wget http://ftp.ucsb.edu/pub/mirrors/linux/gentoo/releases/x86/2007.0/stages/stage3-i686-2007.0.tar.bz2
+
+cd /gentoo
+tar xvfjp /tmp/stage3-i686-2007.0.tar.bz2
+wget http://s3.amazonaws.com/ec2-downloads/modules-2.6.16-ec2.tgz
+
+# Here we write a script that is to be executed in the context of the new
+# filesystem using chroot.
+cat <<EOCHROOT >/gentoo/install-script
+#!/bin/bash
+localedef -i en_US -c -f UTF-8 en_US.UTF-8
+echo "US/Central" >/etc/timezone
+ln -s /usr/share/zoneinfo/US/Central /etc/localtime
+
+ln -s /dev/sda1 /dev/ROOT
+ln -s /dev/sda3 /dev/SWAP
+
+cat <<EOF >/etc/fstab
+/dev/ROOT               /               ext3            noatime         0 1
+/dev/SWAP               none            swap            sw              0 0
+/dev/sda2               /mnt            ext3            defaults        0 0
+shm                     /dev/shm        tmpfs           nodev,nosuid,noexec     0 0
+EOF
+
+cat <<EOF >>/etc/conf.d/net
+#auto lo
+#iface lo inet loopback
+#auto eth0
+#iface eth0 inet dhcp
+EOF
+
+# When you use the -k argument to ec2run, the ssh key file is installed on the
+# instance as /mnt/openssh_id.pub. This rc.local copies it over to the root
+# account so that you can actually use it to login. The code is just copied
+# verbatim from one of the pre-made EC2 images.
+
+cat <<EOF >>/etc/conf.d/local.start
+
+# Fetch any credentials present in the ephemeral store:
+if [ ! -d /root/.ssh ] ; then
+    mkdir -p /root/.ssh
+    chmod 700 /root/.ssh
+fi
+
+# Fetch ssh key for root
+wget http://169.254.169.254/2007-01-19/meta-data/public-keys/0/openssh-key
+mv -f openssh-key /root/.ssh/authorized_keys
+chmod 600 /root/.ssh/authorized_keys
+
+# vim:ts=4
+EOF
+
+cd /root
+tar -C / -zxf modules-2.6.16-ec2.tgz
+
+# Disable the root password
+passwd -d root
+passwd -l root
+
+# Need to configure ssh
+rc-update add sshd default
+
+EOCHROOT
+
+chroot /gentoo /bin/bash /install-script
+rm -f /gentoo/install-script
+rm -f /gentoo/modules-2.6.16-ec2.tgz
+
+umount /gentoo
+}
+
 $*
 
