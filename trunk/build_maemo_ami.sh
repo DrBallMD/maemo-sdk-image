@@ -506,5 +506,27 @@ rm -f /gentoo/modules-2.6.16-ec2.tgz
 umount /gentoo
 }
 
+function configure-gentoo {
+cp /usr/share/zoneinfo/US/Central /etc/localtime
+rc-update add sshd default
+emerge --sync
+# download java
+echo LINGUAS="en" >> /etc/make.conf
+USE="ruby apache2 postgres gd xml jpeg png gif json colordiff subversion curl php mailman" emerge subversion apache postgresql php vim xen-tools xen screen conf-update gentoo-syntax vcscommand dev-java/ant ruby rails curl dhcpcd mediawiki lynx jpgraph portage java aes chkconfig dev-util/git slocate rpm logger mailman sudo sqlite pcel++ mailman commons-logging rhino cvs cvsps gd webalizer
+ACCEPT_KEYWORDS="~x86" emerge ruby-openid gitweb
+gem install ruby-openid
+gem install postgress
+#su - postgres
+# add gforge and rails databases/users
+#java-config --set-system-classpath
+# download helma
+wget http://s3.amazonaws.com/ec2-downloads/modules-2.6.16-ec2.tgz
+tar -C / -zxf /modules-2.6.16-ec2.tgz
+rpm -i --nodeps ec2-ami-tools.noarch.rpm
+#ln -s ../../site_ruby/aes
+/etc/init.d/vixie-cron start
+rc-update add vixie-cron default
+}
+
 $*
 
