@@ -508,8 +508,11 @@ umount /gentoo
 
 function configure-gentoo {
 cp /usr/share/zoneinfo/US/Central /etc/localtime
+# is adding sshd necessary or already done?
 rc-update add sshd default
 emerge --sync
+emerge portage
+# resolve configuration file conflicts?
 # download java
 echo LINGUAS="en" >> /etc/make.conf
 USE="ruby apache2 postgres gd xml jpeg png gif json colordiff subversion curl php mailman perl webdav" emerge subversion apache postgresql php vim xen-tools xen screen conf-update gentoo-syntax vcscommand dev-java/ant ruby rails curl dhcpcd mediawiki lynx jpgraph portage java aes chkconfig dev-util/git slocate rpm logger mailman sudo sqlite pcel++ mailman commons-logging rhino cvs cvsps gd webalizer
