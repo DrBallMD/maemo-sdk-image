@@ -10,6 +10,7 @@
 #  http://www.howtoforge.com/amazon_elastic_compute_cloud_qemu
 #  http://info.rightscale.com/2007/2/14/bundling-up-an-ubuntu-ec2-instance
 #  http://repository.maemo.org/stable/3.1/INSTALL.txt
+#  http://developer.amazonwebservices.com/connect/thread.jspa?messageID=78787
 
 # Need to get settings for
 #  EC2_HOME
@@ -289,7 +290,7 @@ apt-get clean
 function bundle-vol {
 IMAGE_NAME=$1
 echo IMAGE_NAME=$IMAGE_NAME
-ec2-bundle-vol -d /mnt -e /root/secret -k /root/secret/pk.pem -c /root/secret/cert.pem -u $EC2_ID -p $IMAGE_NAME
+ec2-bundle-vol -d /mnt -e /root/secret -k /root/secret/pk.pem -c /root/secret/cert.pem -u $EC2_ID -p $IMAGE_NAME -r i386
 ec2-upload-bundle -b $S3_BUCKET -m /mnt/$IMAGE_NAME.manifest.xml -a $AWS_ID -s $AWS_PASSWORD
 }
 
@@ -507,18 +508,18 @@ umount /gentoo
 }
 
 function configure-gentoo {
-cp /usr/share/zoneinfo/US/Central /etc/localtime
-# sshd is already done
-#rc-update add sshd default
-emerge --sync
-emerge portage
-# resolve configuration file conflicts?
-# download java
-echo LINGUAS="en" >> /etc/make.conf
-#USE="ruby apache2 postgres gd xml jpeg png gif json colordiff subversion curl php mailman perl webdav" emerge subversion apache postgresql php vim xen-tools xen screen conf-update gentoo-syntax vcscommand dev-java/ant ruby rails curl dhcpcd mediawiki lynx jpgraph portage java aes chkconfig dev-util/git slocate rpm logger mailman sudo sqlite pcel++ mailman commons-logging rhino cvs cvsps gd webalizer
-USE="apache2 postgres gd xml jpeg png gif json colordiff curl php mailman perl webdav" emerge screen
-USE="apache2 postgres gd xml jpeg png gif json colordiff curl php mailman perl webdav" emerge dev-java/sun-jdk subversion apache postgresql php vim conf-update app-vim/gentoo-syntax dev-java/ant curl dev-php5/jpgraph dev-util/git slocate rpm logger mailman sudo commons-logging rhino cvs cvsps gd webalizer
-USE="apache2 postgres gd xml jpeg png gif json colordiff curl php mailman perl webdav" ACCEPT_KEYWORDS="~x86" emerge gitweb xen-tools xen app-vim/vcscommand
+ln -s -f /usr/share/zoneinfo/US/Central /etc/localtime
+echo LINGUAS=\"en\" >> /etc/make.conf
+echo USE=\"ruby apache2 postgres gd xml jpeg png gif json colordiff subversion curl php mailman perl webdav\" >> /etc/make.conf
+# resolve configuration file conflicts after any of these installs instead of disabling protection?
+# download of java from source now seems to work -- IBM must have updated the license
+CONFIG_PROTECT="-/*" emerge --sync
+CONFIG_PROTECT="-/*" emerge portage
+CONFIG_PROTECT="-/*" emerge screen vim
+CONFIG_PROTECT="-/*" emerge dev-java/sun-jdk subversion apache postgresql php vim conf-update app-vim/gentoo-syntax dev-java/ant curl dev-php5/jpgraph dev-util/git slocate rpm logger mailman sudo commons-logging rhino cvs cvsps gd webalizer
+CONFIG_PROTECT="-/*" ACCEPT_KEYWORDS="~x86" emerge gitweb xen-tools xen app-vim/vcscommand
+CONFIG_PROTECT="-/*" emerge qemu
+#emerge rails dhcpcd mediawiki lynx aes chkconfig sqlite pcel++
 #gem install ruby-openid
 #gem install postgress
 #su - postgres
@@ -526,10 +527,60 @@ USE="apache2 postgres gd xml jpeg png gif json colordiff curl php mailman perl w
 #java-config --set-system-classpath
 # download helma
 wget http://adele.helma.org/download/helma/1.6.1/helma-1.6.1.tar.gz
-wget http://s3.amazonaws.com/ec2-downloads/modules-2.6.16-ec2.tgz
-tar -C / -zxf /modules-2.6.16-ec2.tgz
+
+#
+# Gather tools and bundle image
+#
+
+wget http://s3.amazonaws.com/ec2-downloads/ec2-ami-tools.noarch.rpm
 rpm -i --nodeps ec2-ami-tools.noarch.rpm
-#ln -s ../../site_ruby/aes
+ln -s /usr/lib/site_ruby/aes /usr/lib/ruby/site_ruby/1.8/aes
+rm -f ec2-ami-tools*
+
+patch -d /usr/lib/site_ruby/aes/amiutil <<ENDPATCH
+diff -u /usr/lib/site_ruby/aes/amiutil/xmlbuilder.rb.orig /usr/lib/site_ruby/aes/amiutil/xmlbuilder.rb
+--- /usr/lib/site_ruby/aes/amiutil/xmlbuilder.rb.orig   2008-02-05 11:58:45.000000000 -0800
++++ /usr/lib/site_ruby/aes/amiutil/xmlbuilder.rb        2008-02-05 12:00:03.000000000 -0800
+@@ -199,7 +199,7 @@
+ 
+       def assign_visit(rexml_node, value)
+         raise 'Can only assign an attribute to an element.' if !rexml_node.is_a?(REXML::Element)
+-        rexml_node.attributes[@name] = value
++        rexml_node.attributes[@name] = value.to_s
+       end
+      
+       def retrieve_visit(rexml_node)
+diff -ru /tmp/amiutil.orig/bundlevol.rb /usr/lib/site_ruby/aes/amiutil/bundlevol.rb
+--- /usr/lib/site_ruby/aes/amiutil/bundlevol.rb.orig   2008-02-05 11:58:45.000000000 -0800
++++ /usr/lib/site_ruby/aes/amiutil/bundlevol.rb	2006-11-24 03:57:16.000000000 -0500
+@@ -82,7 +82,7 @@
+ TEXT
+ 
+-ALWAYS_EXCLUDED = ['/dev', '/media', '/mnt', '/proc', '/sys']
++ALWAYS_EXCLUDED = ['/dev', '/media', '/mnt', '/proc', '/sys', '/etc/dhcpc']
+ LOCAL_FS_TYPES = ['ext2', 'ext3', 'xfs', 'jfs', 'reiserfs']
+ MAX_SIZE_MB = 10 * 1024  # 10 GB in MB
+ MTAB_PATH = '/etc/mtab'
+ DEBUGON = 'on'
+ENDPATCH 
+
+cd /root
+wget http://s3.amazonaws.com/ec2-downloads/ec2-api-tools.zip
+unzip ec2-api-tools.zip
+
+cd /dev
+mknod loop0 b 7 0
+ec2-bundle-vol -d /mnt -e /etc/dhcpc -e /root/secret -k /root/secret/pk.pem -c /root/secret/cert.pem -u $EC2_ID -p gentoo_2007_0_amiselfbundle -r i386
+#bundle-vol gentoo_2007_0_amiselfbundle.img
+
+export EC2_HOME=/root/ec2-api-tools*
+cd /root/ec2-api-tools*/bin
+#publish gentoo_2007_0_amiselfbundle.img
+#ec2-register $S3_BUCKET/$1.manifest.xml
+./ec2-register beagle/gentoo_2007_0_amiselfbungle.img.manifest.xml -K /root/secret/pk.pem -C /root/secret/cert.pem
+}
+
+function configure-gentoo2 {
 /etc/init.d/vixie-cron start
 rc-update add vixie-cron default
 }
