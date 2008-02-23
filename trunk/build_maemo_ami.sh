@@ -583,6 +583,107 @@ cd /root/ec2-api-tools*/bin
 function configure-gentoo2 {
 /etc/init.d/vixie-cron start
 rc-update add vixie-cron default
+emerge \<gcc-4
+# The gcc-3 selection needs to be scripted
+#export CC=gcc-3.4.6
+gcc-config i686-pc-linux-gnu-3.4.6
+#emerge qemu
+source /etc/profile
+#ACCEPT_KEYWORDS="~x86" emerge qemu
+
+ACCEPT_KEYWORDS="~x86" emerge sys-devel/gcc:3.3
+#export CC=gcc-3.3.6
+gcc-config 1
+source /etc/profile
+ACCEPT_KEYWORDS="~x86" USE="app-emulation/qemu-softmmu" emerge qemu
+gcc-config 2
+cd /root
+wget http://www.codesourcery.com/public/gnu_toolchain/arm-none-linux-gnueabi/arm-2007q3-51-arm-none-linux-gnueabi-i686-pc-linux-gnu.tar.bz2
+tar xvfj arm-2007q3*.tar.bz2
+wget http://www.codesourcery.com/public/gnu_toolchain/arm-none-linux-gnueabi/arm-2007q3-51-arm-none-linux-gnueabi.src.tar.bz2
+#emerge rootstrap
+qemu-img create -f qcow2 qemuarm.img 5G
+emerge sys-kernel/gentoo-sources
+emerge crossdev
+export PATH=$PATH:/root/arm-2007q3/bin
+mkdir /usr/local/portage
+echo -n PORTDIR_OVERLAY=\"/usr/local/portage\" >> /etc/make.conf
+
+mkdir /usr/arm-gentoo-linux-gnueabi
+mkdir /usr/arm-gentoo-linux-gnueabi/etc
+crossdev --target arm-gentoo-linux-gnueabi
+cat >/usr/arm-gentoo-linux-gnueabi/etc/make.conf <<EOF
+ACCEPT_KEYWORDS="arm"
+ARCH="arm"
+CFLAGS="-O2 -mfpu=neon -mcpu-cortex-a8 -march=armv7-a -pipe"
+CXXFLAGS="${CFLAGS}"
+CHOST="arm-gentoo-linux-gnueabi"
+LINGUAS="en"
+USE="ruby apache2 postgres gd xml jpeg png gif json colordiff curl php mailman perl webdav"
+CFLAGS="-O2 -pipe"
+CXXFLAGS="${CFLAGS}"
+GENTOO_MIRRORS="http://open-systems.ufl.edu/mirrors/gentoo \
+    http://prometheus.cs.wmich.edu/gentoo \
+    http://mirror.datapipe.net/gentoo \
+    http://ftp.ucsb.edu/pub/mirrors/linux/gentoo/"
+INPUT_DEVICES="keyboard"
+MAKEOPTS="-j2"
+USE="-* minimal"
+EOF
+ln -s /etc/make.globals /usr/arm-gentoo-linux-gnueabi/etc/make.globals
+ln -s /usr/portage/profiles/default-linux/arm /usr/arm-gentoo-linux-gnueabi/etc/make.profile
+
+cat >/root/xmerge <<EOF
+#!/bin/sh
+export ac_cv_func_malloc_0_nonnull=yes
+export ac_cv_func_calloc_0_nonnull=yes
+export ac_cv_func_realloc_0_nonnull=yes
+export CBUILD=$(portageq envvar CHOST)
+export CTARGET=arm-gentoo-linux-gnueabi
+export SYSROOT="/usr/\$\{CTARGET\}"
+export PORTAGE_CONFIGROOT=\$\{SYSROOT\}
+export ROOT=\$\{SYSROOT\}
+exec emerge "\$@"
+EOF
+chmod +x /root/xmerge
+
+cat >/root/xpkg_config <<EOF
+#!/bin/sh
+CTARGET=\$\{0%-pkg-config\}
+SYSROOT="/usr/\$\{CTARGET\}"
+export PKG_CONFIG_LIBDIR="\$\{SYSROOT\}/usr/lib/pkgconfig"
+unset PKG_CONFIG_PATH PKG_CONFIG_ALLOW_SYSTEM_CFLAGS PKG_CONFIG_ALLOW_SYSTEM_LIBS
+exec pkg-config "$@"
+EOF
+chmod +x /root/xpkg-config
+
+/root/xmerge gentoo-sources
+cd /usr/arm-gentoo-linux-gnueabi/usr/src/linux
+#ARCH="arm" CROSS_COMPILE="arm-gentoo-linux-gnueabi-" INSTALL_MOD_PATH="/usr/arm-gentoo-linux-gnueabi" make defconfig netwinder_defconfig
+ARCH="arm" CROSS_COMPILE="arm-gentoo-linux-gnueabi-" INSTALL_MOD_PATH="/usr/arm-gentoo-linux-gnueabi" make defconfig integrator_defconfig
+#ARCH="arm" CROSS_COMPILE="arm-gentoo-linux-gnueabi-" INSTALL_MOD_PATH="/usr/arm-gentoo-linux-gnueabi" make menuconfig
+ARCH="arm" CROSS_COMPILE="arm-gentoo-linux-gnueabi-" INSTALL_MOD_PATH="/usr/arm-gentoo-linux-gnueabi" make
+
+ACCEPT_KEYWORDS="~x86" emerge \=sys-devel/gcc-4.2.2
+/root/xmerge --sync
+/root/xmerge portage
+
+cd /root
+dd of=qemu-arm.img.ext3 count=0 bs=1M seek=512
+mkfs.ext3 ./qemu-arm.img.ext3
+mknod /dev/loop0 b 7 0
+mkdir qemu-arm
+mount -o loop -t ext3 ./qemu-arm.img.ext3 ./qemu-arm
+cd qemu-arm
+rsync -a /usr/arm-gentoo-linux-gnueabi/ .
+cd /root
+umount qemu-arm
+
+emerge sys-fs/mtd
+mkfs.jffs2 --root=/usr/arm-gentoo-linux-gnueabi -o gentoo-arm.jffs2
+USE="minimal fbdev input_devices_mouse input_devices_keyboard" /root/xmerge xorg-x11
+
+
 }
 
 $*
