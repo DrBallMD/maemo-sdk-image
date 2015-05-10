@@ -1,0 +1,3 @@
+This project has been moved to [SDK-AMI.Garage.Maemo.org](http://sdk-ami.garage.maemo.org), since that hosting site is specifically targeting Maemo.
+
+Maemo is the open source development platform for the Nokia Internet Tablet devices, such as the 770 and N800.  Amazon's Electric Compute Cloud (EC2) is a service that provides scalable computing resources on a pay-per-use model with no minimum fees.  The EC2 image created by this script is intended for use by those without a spare computer, insufficient resources to run a virtual computer (VMWare or QEMU), or simply don't want to wait to download a large virtual computer image.
